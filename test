@@ -1,0 +1,47 @@
+public void cmdImport(List<String> args, PrintWriter out) throws Exception {
+    boolean noid = false;
+    boolean saveRoleChangEvents = false;
+    String filename = null;
+
+    this.checkForceArg(args);
+    SailPointContext ctx = this.createContext();
+
+    try {
+        Configuration sysconfig = (Configuration) ctx.getObjectByName(Configuration.class, "SystemConfiguration");
+        if (null != sysconfig) {
+            saveRoleChangEvents = Util.otob(sysconfig.getBoolean("allowRolePropagation"));
+        }
+
+        for (String arg : Util.iterate(args)) {
+            if (arg.equals("-noids")) {
+                noid = true;
+            } else if (arg.equals("-noroleevents")) {
+                saveRoleChangEvents = false;
+            } else {
+                filename = arg;
+            }
+        }
+
+        if (filename == null) {
+            out.format("import [-noids] [-noroleevents] <filename>\n");
+            out.format("-noids: remove all id attributes before parsing\n");
+            out.format("-noroleevents: disable generation of role change events for role propagation\n");
+        } else {
+            String xml = Util.readFile(filename);
+            ctx.decache();
+            
+            Importer i = new Importer(ctx, new ImportMonitor(out));
+            i.setScrubIds(noid);
+            i.setRolePropEnabled(saveRoleChangEvents);
+            i.importXml(xml);
+
+            // Votre ligne personnalisée modifiée
+            Auditor.log("import", (String) args.get(2) + " " + (String) args.get(1));
+            
+            ctx.commitTransaction();
+        }
+    } finally {
+        SailPointFactory.releaseContext(ctx);
+        this.enableForce = false;
+    }
+}
